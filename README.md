@@ -4,7 +4,7 @@
 
 **A quieter qBittorrent WebUI. Watch your connections, manage your transfers, and keep the details that matter in view.**
 
-Swarm is an independent frontend for qBittorrent, with an open black workspace, a flat transfer list, and a lightweight globe. It connects directly to the qBittorrent Web API. No extra server, CDN, map tiles, VueTorrent runtime, or hosted account is required.
+Swarm is an independent frontend for qBittorrent, with an open workspace, a flat transfer list, and a lightweight globe. It connects directly to the qBittorrent Web API. No extra server, CDN, map tiles, VueTorrent runtime, or hosted account is required.
 
 ## What it does
 
