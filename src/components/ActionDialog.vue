@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import Icon from "./Icon.vue";
+import LimitChoice from "./LimitChoice.vue";
+import { commonLimit, shareLimitRequests, type LimitDraft, type LimitField } from "../lib/shareLimits";
 import { api } from "../lib/api";
 import { state, operation, announce, loadDetail, closeInspector } from "../lib/store";
 const props = defineProps<{ action: string; hashes: string[] }>();
@@ -29,13 +31,25 @@ const urls = ref(""),
   sequential = ref(false),
   deleteFiles = ref(false),
   value = ref(""),
-  down = ref(0),
-  up = ref(0),
-  ratio = ref(-1),
-  seedMinutes = ref(-1),
-  idleMinutes = ref(-1),
+  down = ref<number | string>(0),
+  up = ref<number | string>(0),
   files = ref<File[]>([]),
   error = ref("");
+const limits = reactive<LimitDraft>({ ratio_limit: -2, seeding_time_limit: -2, inactive_seeding_time_limit: -2 });
+let initialLimits: LimitDraft = { ...limits };
+let originalDown: number | string = 0, originalUp: number | string = 0;
+const globalLimits = ref<Record<string, unknown>>({});
+const globalsReady = ref(false);
+function globalLabel(key: LimitField) {
+  if (!globalsReady.value) return "Uses qBittorrent’s global setting.";
+  const field = key === "ratio_limit" ? "max_ratio" : key === "seeding_time_limit" ? "max_seeding_time" : "max_inactive_seeding_time";
+  const limit = Number(globalLimits.value[field] ?? -1);
+  return globalLimits.value[field + "_enabled"] === false || limit < 0 ? "Global setting: unlimited." : key === "ratio_limit" ? `Global ratio: ${limit.toFixed(2)}.` : `Global setting: ${limit} minutes.`;
+}
+function commonSpeed(key: "dl_limit" | "up_limit") {
+  const values = selected.value.map(torrent => Math.max(0, Number(torrent[key] ?? 0)) / 1024);
+  return values.every(value => value === values[0]) ? (values[0] ?? 0) : "";
+}
 onMounted(() => {
   value.value =
     props.action === "rename"
@@ -46,11 +60,13 @@ onMounted(() => {
   savePath.value = one.value?.save_path ?? "";
   category.value = one.value?.category ?? "";
   tags.value = one.value?.tags ?? "";
-  down.value = Math.max(0, Number(one.value?.dl_limit ?? 0)) / 1024;
-  up.value = Math.max(0, Number(one.value?.up_limit ?? 0)) / 1024;
-  ratio.value = Number(one.value?.ratio_limit ?? -1);
-  seedMinutes.value = Number(one.value?.seeding_time_limit ?? -1);
-  idleMinutes.value = Number(one.value?.inactive_seeding_time_limit ?? -1);
+  down.value = originalDown = commonSpeed("dl_limit");
+  up.value = originalUp = commonSpeed("up_limit");
+  for (const key of Object.keys(limits) as LimitField[]) limits[key] = commonLimit(selected.value, key);
+  initialLimits = { ...limits };
+  if (props.action === "limits") void api.get<Record<string, unknown>>("app/preferences").then(prefs => {
+    globalLimits.value = prefs; globalsReady.value = true;
+  }).catch(() => { /* Choices remain usable when global settings cannot be read. */ });
 });
 async function submit() {
   error.value = "";
@@ -111,26 +127,18 @@ async function submit() {
           location: savePath.value.trim(),
         });
       } else if (props.action === "limits") {
-        if (
-          [down.value, up.value].some(
-            (number) => !Number.isFinite(number) || number < 0,
-          )
-        )
-          throw new Error("Speed limits must be zero or greater.");
-        await api.post("torrents/setDownloadLimit", {
-          hashes,
-          limit: Math.round(down.value * 1024),
-        });
-        await api.post("torrents/setUploadLimit", {
-          hashes,
-          limit: Math.round(up.value * 1024),
-        });
-        await api.post("torrents/setShareLimits", {
-          hashes,
-          ratioLimit: ratio.value,
-          seedingTimeLimit: seedMinutes.value,
-          inactiveSeedingTimeLimit: idleMinutes.value,
-        });
+        const requests = shareLimitRequests(selected.value, limits, initialLimits);
+        const speeds = [[down.value, originalDown, "torrents/setDownloadLimit"], [up.value, originalUp, "torrents/setUploadLimit"]] as const;
+        for (const [value] of speeds) {
+          if (value !== "" && (!Number.isFinite(Number(value)) || Number(value) < 0))
+            throw new Error("Speed limits must be zero or greater.");
+        }
+        // Apply only edited fields. Preserve each selected torrent’s other limits and action.
+        for (const request of requests) await api.post("torrents/setShareLimits", request);
+        for (const [value, original, endpoint] of speeds) {
+          if (value !== "" && value !== original)
+            await api.post(endpoint, { hashes, limit: Math.round(Number(value) * 1024) });
+        }
       } else if (props.action === "labels") {
         if (category.value && !state.categories[category.value])
           await api.post("torrents/createCategory", {
@@ -266,43 +274,28 @@ async function submit() {
                   v-model.number="down"
                   type="number"
                   min="0"
-                  step="1" /></label
+                  step="any" /></label
               ><label class="field"
                 >Upload limit (KiB/s)<input
                   v-model.number="up"
                   type="number"
                   min="0"
-                  step="1"
+                  step="any"
               /></label>
             </div>
-            <p class="muted small-text">0 means unlimited.</p>
-            <label class="field"
-              >Share ratio limit<input
-                v-model.number="ratio"
-                type="number"
-                min="-2"
-                step=".1"
-            /></label>
+            <p class="muted small-text">Speed limits: 0 means unlimited.<span v-if="selected.length > 1"> Leave a speed blank to keep each transfer’s current limit.</span></p>
+            <div class="seeding-limit-heading">
+              <h3>Seeding limits</h3>
+              <button type="button" class="text-button" :disabled="state.busy" @click="limits.ratio_limit = -2; limits.seeding_time_limit = -2; limits.inactive_seeding_time_limit = -2">Use global for all</button>
+            </div>
+            <p v-if="selected.length === 1" class="muted small-text">Current share ratio: {{ Number(one?.ratio ?? 0).toFixed(2) }}</p>
+            <LimitChoice v-model="limits.ratio_limit" label="Share ratio" ratio :global-label="globalLabel('ratio_limit')" :mixed="selected.length > 1" :disabled="state.busy" />
             <div class="field-pair">
-              <label class="field"
-                >Seeding limit (minutes)<input
-                  v-model.number="seedMinutes"
-                  type="number"
-                  min="-2"
-                  step="1" /></label
-              ><label class="field"
-                >Inactive seeding (minutes)<input
-                  v-model.number="idleMinutes"
-                  type="number"
-                  min="-2"
-                  step="1"
-              /></label>
+              <LimitChoice v-model="limits.seeding_time_limit" label="Seeding time" :global-label="globalLabel('seeding_time_limit')" :mixed="selected.length > 1" :disabled="state.busy" />
+              <LimitChoice v-model="limits.inactive_seeding_time_limit" label="Inactive seeding time" :global-label="globalLabel('inactive_seeding_time_limit')" :mixed="selected.length > 1" :disabled="state.busy" />
             </div>
-            <p class="muted small-text">
-              Share limits: −1 means unlimited, −2 uses qBittorrent’s global
-              limit.
-            </p></template
-          >
+            <p class="muted small-text">{{ selected.length > 1 ? 'Each transfer keeps its existing action when a limit is reached.' : one?.share_limit_action === 'Stop' ? 'When a limit is reached: stop seeding.' : one?.share_limit_action && one.share_limit_action !== 'Default' ? 'The existing action when a limit is reached is preserved.' : globalsReady && Number(globalLimits.max_ratio_act) === 0 ? 'Global action when a limit is reached: stop seeding.' : 'The global action when a limit is reached is preserved.' }}</p>
+          </template>
           <template v-else-if="action === 'labels'"
             ><label class="field"
               >Category<input

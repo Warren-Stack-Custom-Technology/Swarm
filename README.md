@@ -16,11 +16,13 @@ Swarm is an independent frontend for qBittorrent, with an open workspace, a flat
 - **Clear controls:** the sidebar owns search, filters and sorting. Library shows a single full table. Searchable dark menus support keyboard navigation, and each sidebar row shows its share ratio.
 - **Persistent inspection:** keep a torrent or peer pinned while expanding the workspace, switching projections, or receiving live updates. Disconnected peers remain as labelled last-seen snapshots.
 - **Everyday transfer tools:** magnets, torrent files, start/stop, bulk selection, file priorities, trackers, names, save locations, speed/share limits, categories, tags, sequential download, recheck and reannounce.
+- **Speed & totals:** shared collapsible speed graph in Atlas and Library, including expanded workspaces. Choose Session or periods up to 24 hours, toggle each direction, and inspect a point. Session/all-time totals come directly from qBittorrent. Graph history is collected while the page is open, retains up to 24 hours, and shows gaps when no samples were collected.
+- **Clear seeding rules:** use global limits, seed without a cutoff, or set a custom ratio/time. The inspector shows each torrent’s ratio policy and connected downloader status. Bulk edits preserve untouched settings.
 - **Useful extras:** installed search plugins, RSS articles, activity logs, and common qBittorrent settings.
 
 ## Install
 
-Download **Swarm-1.0.3.zip** from [Releases](../../releases/latest) and extract it.
+Download **Swarm-1.1.0.zip** from [Releases](../../releases/latest) and extract it.
 
 On Windows, run `Apply-Update.ps1` from Administrator PowerShell:
 
@@ -78,7 +80,7 @@ npm run build
 python3 scripts/package_release.py
 ```
 
-The static app is built to `build/webui/public`; the distributable is written to `artifacts/Swarm-1.0.3.zip`.
+The static app is built to `build/webui/public`; the distributable is written to `artifacts/Swarm-1.1.0.zip`.
 
 ```sh
 npm run dev

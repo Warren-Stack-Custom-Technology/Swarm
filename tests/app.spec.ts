@@ -101,6 +101,7 @@ beforeEach(() => {
   Object.assign(state, {
     authenticated: false,
     connecting: true,
+    history: [],
     error: "",
     notice: "",
     busy: false,
@@ -145,6 +146,18 @@ async function app() {
   return wrapper;
 }
 describe("standalone application", () => {
+  test("keeps one shared speed tracker and its samples through Atlas and Library switches", async () => {
+    const wrapper = await app();
+    preferences.speedTrackerOpen = true;
+    await flushPromises();
+    const tracker = wrapper.get(".speed-tracker").element;
+    const samples = [...state.history];
+    preferences.view = "library"; await flushPromises();
+    expect(wrapper.get(".speed-tracker").element).toBe(tracker);
+    expect(state.history).toEqual(samples);
+    preferences.view = "atlas"; state.expanded = true; await flushPromises();
+    expect(wrapper.get(".speed-tracker").classes()).toContain("expanded-workspace");
+  });
   test("loads the direct API and provides its own shell", async () => {
     const wrapper = await app();
     expect(wrapper.text()).toContain("swarm.");

@@ -85,6 +85,10 @@ export function installDemo() {
         full_update: true,
         torrents,
         server_state: {
+          dl_info_data: 2_147_483_648,
+          up_info_data: 4_294_967_296,
+          alltime_dl: 1_099_511_627_776,
+          alltime_ul: 2_199_023_255_552,
           dl_info_speed: 2_500_000,
           up_info_speed: 5_250_000,
           connection_status: "connected",

@@ -26,6 +26,22 @@ import {
   duration,
   stopped,
 } from "../lib/format";
+const ratioPolicy = computed(() => {
+  const torrent = selectedTorrent.value;
+  if (!torrent) return "Use global limits";
+  const rule = Number(torrent.ratio_limit ?? -2);
+  if (rule === -1) return "Unlimited ratio";
+  if (rule >= 0) return `Ratio ${rule.toFixed(2)}`;
+  const effective = Number(torrent.max_ratio ?? -1);
+  return effective >= 0 ? `Global ratio ${effective.toFixed(2)}` : "Use global limits";
+});
+const seedingStatus = computed(() => {
+  const torrent = selectedTorrent.value;
+  if (!torrent || torrent.progress < 1) return "";
+  if (stopped(torrent.state)) return "Seeding is stopped.";
+  if (torrent.upspeed > 0) return `Uploading to ${torrent.num_leechs} connected downloader${torrent.num_leechs === 1 ? "" : "s"}.`;
+  return torrent.num_leechs > 0 ? "Downloaders are connected; no upload traffic right now." : "Available to seed; no downloaders connected right now.";
+});
 const priorityOptions = [
   { value: 0, label: "Skip" },
   { value: 1, label: "Normal" },
@@ -186,6 +202,10 @@ async function copyMagnet() {
           ><strong>{{ Number(selectedTorrent.ratio || 0).toFixed(2) }}</strong>
         </div>
       </div>
+      <button class="seeding-rule" @click="emit('action', 'limits', [selectedTorrent.hash])">
+        <span>Seeding cutoff</span><strong>{{ ratioPolicy }}</strong><Icon name="settings" :size="15" />
+      </button>
+      <p v-if="seedingStatus" class="seeding-status">{{ seedingStatus }}</p>
       <div class="inspector-actions">
         <button
           class="button compact"

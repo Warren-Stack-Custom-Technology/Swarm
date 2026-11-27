@@ -34,20 +34,34 @@ jobs:
           name: Swarm-${{ steps.version.outputs.version }}
           path: artifacts/Swarm-${{ steps.version.outputs.version }}.*
   publish:
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: Swarm-${{ needs.verify.outputs.version }}
           path: artifacts
-      - name: Attach verified release files
+      - name: Publish verified release from merged main
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RELEASE_TAG: ${{ github.event.release.tag_name }}
+          MERGED_COMMIT: ${{ github.sha }}
           SWARM_VERSION: ${{ needs.verify.outputs.version }}
-        run: gh release upload "$RELEASE_TAG" "artifacts/Swarm-${SWARM_VERSION}.zip" "artifacts/Swarm-${SWARM_VERSION}.sha256" --clobber
+        run: |
+          set -euo pipefail
+          release_tag="v${SWARM_VERSION}"
+          if [ "$EVENT_NAME" = release ]; then
+            gh release upload "$EVENT_RELEASE_TAG" "artifacts/Swarm-${SWARM_VERSION}.zip" "artifacts/Swarm-${SWARM_VERSION}.sha256" --clobber
+          elif gh release view "$release_tag" >/dev/null 2>&1; then
+            echo "Release $release_tag already exists; leaving published files unchanged."
+          else
+            awk -v version="$SWARM_VERSION" '$0 == "## " version { capture=1; next } capture && /^## / {exit} capture {print}' CHANGELOG.md > "$RUNNER_TEMP/swarm-notes.md"
+            printf '\nBuilt and verified from merged commit %s.\n' "$MERGED_COMMIT" >> "$RUNNER_TEMP/swarm-notes.md"
+            gh release create "$release_tag" "artifacts/Swarm-${SWARM_VERSION}.zip" "artifacts/Swarm-${SWARM_VERSION}.sha256" --target "$MERGED_COMMIT" --title "Swarm ${SWARM_VERSION}" --notes-file "$RUNNER_TEMP/swarm-notes.md"
+          fi

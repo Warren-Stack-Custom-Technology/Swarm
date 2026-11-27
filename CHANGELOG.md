@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0
+
+- Replace numeric seeding codes with Use global limits, Unlimited, and Custom choices; show the inherited ratio and current action.
+- Fix share-limit saves with qBittorrent 5.3 by sending the required action and match-mode fields.
+- Preserve untouched speed limits, seeding times, actions, and match modes, including mixed bulk selections.
+- Show each transfer’s seeding cutoff and whether downloaders are currently connected in the inspector.
+- Add a shared, collapsible upload/download speed tracker to Atlas, Library, and expanded workspaces.
+- Include Session, 5-minute, 30-minute, 1-hour, 3-hour, 6-hour, 12-hour, and 24-hour graph periods, independent series toggles, and hover readings.
+- Show qBittorrent session and all-time transfer totals. Keep up to 24 hours of page-collected history and leave missing samples as gaps.
+
 ## 1.0.3
 
 - Closing the inspector clears its torrent focus and peer highlight, restoring all connections in the current sidebar filter.
