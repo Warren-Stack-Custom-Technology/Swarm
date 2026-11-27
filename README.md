@@ -20,7 +20,7 @@ Swarm is an independent frontend for qBittorrent, with an open workspace, a flat
 
 ## Install
 
-Download **Swarm-1.0.2.zip** from [Releases](../../releases/latest) and extract it.
+Download **Swarm-1.0.3.zip** from [Releases](../../releases/latest) and extract it.
 
 On Windows, run `Apply-Update.ps1` from Administrator PowerShell:
 
@@ -78,7 +78,7 @@ npm run build
 python3 scripts/package_release.py
 ```
 
-The static app is built to `build/webui/public`; the distributable is written to `artifacts/Swarm-1.0.2.zip`.
+The static app is built to `build/webui/public`; the distributable is written to `artifacts/Swarm-1.0.3.zip`.
 
 ```sh
 npm run dev

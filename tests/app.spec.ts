@@ -12,6 +12,7 @@ import {
   stop,
   syncMain,
   syncPeers,
+  scopedTorrents,
 } from "../src/lib/store";
 import { preferences } from "../src/lib/preferences";
 import type { Peer, Torrent } from "../src/types";
@@ -276,6 +277,63 @@ describe("transfer actions", () => {
 });
 
 describe("one coherent transfer workspace", () => {
+  test.each([false, true])("closing inspection restores all connections (expanded: %s)", async (expanded) => {
+    const wrapper = await app();
+    inspectTorrent(hash);
+    inspectPeer(hash, key, peer);
+    state.expanded = expanded;
+    await flushPromises();
+    expect(scopedTorrents.value.map((t) => t.hash)).toEqual([hash]);
+    await wrapper.get('[aria-label="Close inspector"]').trigger("click");
+    await flushPromises();
+    expect(state.inspectorOpen).toBe(false);
+    expect(state.pinnedPeer).toBeNull();
+    expect(state.selectedHash).toBe("");
+    expect(state.focusHash).toBe("");
+    expect(scopedTorrents.value.map((t) => t.hash).sort()).toEqual([hash, second]);
+    expect(state.expanded).toBe(expanded);
+    await syncMain();
+    await syncPeers();
+    expect(state.inspectorOpen).toBe(false);
+    expect(state.focusHash).toBe("");
+  });
+  test("unpinning a peer restores the full atlas and keeps transfer details open", async () => {
+    const wrapper = await app();
+    inspectTorrent(hash);
+    inspectPeer(hash, key, peer);
+    await flushPromises();
+    await wrapper.get('[aria-label="Unpin peer"]').trigger("click");
+    expect(state.pinnedPeer).toBeNull();
+    expect(state.focusHash).toBe("");
+    expect(scopedTorrents.value).toHaveLength(2);
+    expect(state.inspectorOpen).toBe(true);
+    expect(state.selectedHash).toBe(hash);
+  });
+  test("Escape first leaves expanded mode, then closes inspection and restores the atlas", async () => {
+    await app();
+    inspectTorrent(hash);
+    inspectPeer(hash, key, peer);
+    state.expanded = true;
+    await flushPromises();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(state.inspectorOpen).toBe(true);
+    expect(state.focusHash).toBe(hash);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(state.inspectorOpen).toBe(false);
+    expect(state.pinnedPeer).toBeNull();
+    expect(state.focusHash).toBe("");
+    expect(scopedTorrents.value).toHaveLength(2);
+  });
+  test("closing inspection clears connection focus while respecting sidebar filters", async () => {
+    const wrapper = await app();
+    state.search = "Second";
+    inspectTorrent(second);
+    await flushPromises();
+    await wrapper.get('[aria-label="Close inspector"]').trigger("click");
+    expect(state.focusHash).toBe("");
+    expect(state.search).toBe("Second");
+    expect(scopedTorrents.value.map((t) => t.hash)).toEqual([second]);
+  });
   test("shows one transfer surface and one filter set in each view", async () => {
     const wrapper = await app();
     expect(wrapper.findAll(".transfer-controls")).toHaveLength(1);

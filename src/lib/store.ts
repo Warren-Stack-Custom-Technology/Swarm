@@ -420,6 +420,15 @@ export async function loadDetail(force = false) {
       queueMicrotask(() => void loadDetail(true));
   }
 }
+export function unpinPeer() {
+  state.pinnedPeer = null;
+  state.focusHash = "";
+}
+export function closeInspector() {
+  state.inspectorOpen = false;
+  state.selectedHash = "";
+  unpinPeer();
+}
 export function inspectTorrent(hash: string, focus = true) {
   const changed = state.selectedHash !== hash;
   state.selectedHash = hash;

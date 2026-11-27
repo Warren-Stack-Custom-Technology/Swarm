@@ -9,7 +9,7 @@ import ActionDialog from "./components/ActionDialog.vue";
 import Icon from "./components/Icon.vue";
 import { api } from "./lib/api";
 import { preferences } from "./lib/preferences";
-import { state, start, stop, login, operation, connect } from "./lib/store";
+import { state, start, stop, login, operation, connect, closeInspector } from "./lib/store";
 import { bytes, speed } from "./lib/format";
 const settingsOpen = ref(false),
   dialog = ref<{ action: string; hashes: string[] } | null>(null),
@@ -65,7 +65,7 @@ function keys(event: KeyboardEvent) {
     if (dialog.value && !state.busy) dialog.value = null;
     else if (settingsOpen.value) settingsOpen.value = false;
     else if (state.expanded) state.expanded = false;
-    else if (state.inspectorOpen) state.inspectorOpen = false;
+    else if (state.inspectorOpen) closeInspector();
     else state.checked = [];
   }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "o") {

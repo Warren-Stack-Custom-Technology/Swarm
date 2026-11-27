@@ -15,6 +15,8 @@ import {
   operation,
   loadDetail,
   focusTorrent,
+  closeInspector,
+  unpinPeer,
 } from "../lib/store";
 import {
   bytes,
@@ -147,7 +149,7 @@ async function copyMagnet() {
       ><button
         class="icon-button small"
         aria-label="Close inspector"
-        @click="state.inspectorOpen = false"
+        @click="closeInspector"
       >
         <Icon name="close" />
       </button>
@@ -252,7 +254,7 @@ async function copyMagnet() {
         ><button
           class="icon-button small"
           aria-label="Unpin peer"
-          @click="state.pinnedPeer = null"
+          @click="unpinPeer"
         >
           <Icon name="close" :size="14" />
         </button>

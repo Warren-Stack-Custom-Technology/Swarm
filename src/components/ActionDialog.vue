@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import Icon from "./Icon.vue";
 import { api } from "../lib/api";
-import { state, operation, announce, loadDetail } from "../lib/store";
+import { state, operation, announce, loadDetail, closeInspector } from "../lib/store";
 const props = defineProps<{ action: string; hashes: string[] }>();
 const emit = defineEmits<{ close: [] }>();
 const selected = computed(() =>
@@ -95,9 +95,7 @@ async function submit() {
           deleteFiles: deleteFiles.value,
         });
         if (props.hashes.includes(state.selectedHash)) {
-          state.inspectorOpen = false;
-          state.selectedHash = "";
-          state.pinnedPeer = null;
+          closeInspector();
         }
       } else if (props.action === "rename") {
         if (!value.value.trim()) throw new Error("Enter a name.");

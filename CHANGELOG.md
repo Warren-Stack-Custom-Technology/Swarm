@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3
+
+- Closing the inspector clears its torrent focus and peer highlight, restoring all connections in the current sidebar filter.
+- Unpinning a peer also restores the full atlas while keeping transfer details open.
+- Apply the same cleanup when closing with Escape or removing the inspected transfer.
+
 ## 1.0.2
 
 - Add a Show most globe action that finds a view with fewer peers hidden behind the globe, keeping the exit visible.
