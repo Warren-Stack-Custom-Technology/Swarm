@@ -74,6 +74,7 @@ export const preferences = reactive({
   ),
   animate: json<boolean>("swarm.animate", json("swarm_animate", true)),
   showIdle: json<boolean>("swarm.idle", json("swarm_idle_routes", false)),
+  speedTrackerOpen: json<boolean>("swarm.speedTrackerOpen", false),
   view: json<"atlas" | "library">("swarm.view", "atlas"),
   markerSize: Math.max(
     5,

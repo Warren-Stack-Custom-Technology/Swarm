@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Atlas from "./components/Atlas.vue";
+import SpeedTracker from "./components/SpeedTracker.vue";
 import TransferList from "./components/TransferList.vue";
 import LibraryTable from "./components/LibraryTable.vue";
 import Inspector from "./components/Inspector.vue";
@@ -230,6 +231,7 @@ onBeforeUnmount(() => {
         @action="action"
       /><Inspector @action="action" />
     </main>
+    <SpeedTracker />
     <footer class="app-footer">
       <div>
         <i

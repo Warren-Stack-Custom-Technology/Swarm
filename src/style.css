@@ -3255,3 +3255,54 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .atlas-empty-note { position:absolute; left:24px; bottom:24px; padding:11px 14px; background:#17171be8; border-left:2px solid #7c7c8a; color:#c6c6d3; font-size:calc(14px * var(--ui-scale,1)); pointer-events:none; }
+
+/* Shared speed tracker: same workspace dock in Atlas and Library. */
+.speed-tracker { flex: 0 0 auto; min-width: 0; border-top: 1px solid var(--line); background: #111113; }
+.speed-tracker.expanded-workspace { position: fixed; left: 0; right: 0; bottom: 0; z-index: 81; }
+.workspace.expanded { bottom: var(--speed-tracker-height, 44px); }
+.speed-tracker-header { min-height: 43px; padding: 5px 22px; display: flex; align-items: center; gap: 24px; }
+.tracker-toggle { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.tracker-toggle svg { transition: transform .15s; }
+.tracker-chevron-open { transform: rotate(180deg); }
+.tracker-current { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tracker-session { margin-left: auto; color: var(--muted); font-size: .88em; }
+.speed-tracker-body { max-height: min(42vh, 390px); overflow: auto; padding: 0 22px 12px; }
+.tracker-controls { display: flex; align-items: center; gap: 20px; }
+.tracker-controls > .select-menu { margin-left: auto; }
+.tracker-legend { display: flex; gap: 18px; }
+.tracker-legend button { display: inline-flex; align-items: center; gap: 7px; }
+.tracker-legend i { display: inline-block; width: 16px; height: 3px; background: currentColor; }
+.tracker-legend [aria-pressed="false"] { opacity: .45; }
+.tracker-hover { color: var(--muted); font-size: .85em; font-variant-numeric: tabular-nums; }
+.speed-chart { display: block; width: min(100%, 960px); height: auto; margin-inline: auto; overflow: visible; }
+.speed-chart text { fill: #a7a7b2; font-size: 12px; }
+.chart-grid { stroke: #303038; stroke-width: 1; stroke-dasharray: 3 4; }
+.chart-download, .chart-upload { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.chart-download { stroke: #51ed9a; }
+.chart-upload { stroke: #38b9ff; }
+.chart-download-point { fill: #51ed9a; }
+.chart-upload-point { fill: #38b9ff; }
+.chart-crosshair { stroke: #93939c; stroke-dasharray: 3 3; }
+.speed-tracker .download-text { color: #51ed9a; }
+.speed-tracker .upload-text { color: #38b9ff; }
+.tracker-totals { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; font-size: .88em; }
+.tracker-totals > span { display: flex; flex-wrap: wrap; gap: 14px; }
+.tracker-totals strong { font-weight: 500; color: #b5b5bf; }
+.tracker-history-note { margin: 8px 0 0; color: var(--muted); font-size: .78em; }
+.seeding-limit-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 20px; margin: 20px 0 12px; }
+.seeding-limit-heading h3 { font-size: 1.05em; font-weight: 500; }
+.limit-choice-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.limit-choice-controls > .select-menu { flex: 1 1 150px; min-width: 0; }
+.limit-choice-controls > input { width: 100%; min-width: 0; }
+@media (max-width: 700px) {
+  .speed-tracker-header { padding: 6px 12px; gap: 12px; flex-wrap: wrap; }
+  .tracker-session { display: none; }
+  .speed-tracker-body { padding-left: 10px; padding-right: 10px; }
+  .tracker-controls { flex-wrap: wrap; gap: 8px; }
+  .tracker-hover { order: 3; width: 100%; min-height: 1.3em; }
+  .tracker-totals { flex-direction: column; }
+}
+.seeding-rule { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 0; background: none; border: 0; border-top: 1px solid var(--line); color: #aaaab5; text-align: left; font-size: .88em; }
+.seeding-rule strong { margin-left: auto; color: #dedee6; font-weight: 500; }
+.seeding-rule:hover strong { color: #fff; }
+.seeding-status { margin: 0 0 14px; color: var(--muted); font-size: .84em; line-height: 1.5; }

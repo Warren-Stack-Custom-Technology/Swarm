@@ -1,5 +1,6 @@
 import { computed, reactive, watch } from "vue";
 import { api, ApiError } from "./api";
+import { recordSpeed, type SpeedSample } from "./speedHistory";
 import { GeoLookup, isPublicIp } from "./geo";
 import { identity, preferences, allocateIdentities } from "./preferences";
 import { statusGroup } from "./format";
@@ -50,7 +51,7 @@ export const state = reactive({
     error: "",
     loading: false,
   },
-  history: [] as { down: number; up: number }[],
+  history: [] as SpeedSample[],
   geoVersion: 0,
   geoBusy: false,
   geoError: "",
@@ -252,11 +253,11 @@ export function applyMain(response: MainResponse) {
     if (!next[hash]) delete state.peers[hash];
   rid = response.rid;
   state.lastSync = Date.now();
-  state.history.push({
+  recordSpeed(state.history, {
+    at: state.lastSync,
     down: Number(state.server.dl_info_speed ?? 0),
     up: Number(state.server.up_info_speed ?? 0),
   });
-  if (state.history.length > 60) state.history.shift();
 }
 export async function syncMain() {
   if (mainBusy || !state.authenticated || document.hidden) return;
