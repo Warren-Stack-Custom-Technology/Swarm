@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { geoInterpolate } from "d3-geo";
+import { bestGlobeView } from "../lib/globe-fit";
 import Icon from "./Icon.vue";
 import Glyph from "./Glyph.vue";
+import SelectMenu from "./SelectMenu.vue";
 import {
   drawConnections,
   drawOrigin,
@@ -12,26 +14,33 @@ import {
 } from "../lib/renderer";
 import {
   clampFlatPan,
-  peersNearPoint,
+  pickConnections,
   projectLocation,
   trafficVelocity,
   zoomCameraAt,
 } from "../lib/scene";
-import type { MapConnection, SceneRoute, SwarmCamera } from "../lib/scene";
-import type { GeoLocation } from "../types";
+import type {
+  MapConnection,
+  SceneRoute,
+  SwarmCamera,
+  TrafficHit,
+} from "../lib/scene";
+import type { GeoLocation, Peer } from "../types";
 import { speed } from "../lib/format";
 import { identity, preferences } from "../lib/preferences";
 import {
   connections,
   inspectedPeer,
   origin,
-  scopedPeers,
-  scopedTorrents,
   state,
   totals,
-  torrents,
+  filtered,
+  scopedPeers,
+  scopedTorrents,
+  hasFilters,
+  resetFilters,
   inspectConnection,
-  inspectTorrent,
+  inspectPeer,
 } from "../lib/store";
 
 const canvas = ref<HTMLCanvasElement>(),
@@ -52,7 +61,11 @@ const hovered = computed(() =>
 const selectedId = computed(() =>
   state.pinnedPeer ? state.pinnedPeer.hash + "|" + state.pinnedPeer.key : "",
 );
-const highlight = computed(() => selectedId.value || hoveredId.value);
+const highlight = computed(() =>
+  connections.value.some((connection) => connection.id === selectedId.value)
+    ? selectedId.value
+    : "",
+);
 const camera = computed<SwarmCamera>(() => ({
   ...dimensions.value,
   mode: mode.value,
@@ -65,8 +78,48 @@ const camera = computed<SwarmCamera>(() => ({
 const scopeName = computed(() =>
   state.focusHash
     ? (state.torrents[state.focusHash]?.name ?? "Selected transfer")
-    : "All transfers",
+    : "Connections",
 );
+const scopeOptions = computed(() => [
+  {
+    value: "",
+    label: `${hasFilters.value ? "All matching transfers" : "All transfers"} (${filtered.value.length})`,
+  },
+  ...filtered.value.map((torrent) => ({
+    value: torrent.hash,
+    label: torrent.name,
+    ...identity(torrent.hash),
+  })),
+]);
+const peerOptions = computed(() => {
+  const options = connections.value.map((connection) => ({
+    value: connection.id,
+    label: `${connection.torrentName} · ${connection.location.label} · ${connection.ip}`,
+    color: connection.color,
+    shape: connection.shape,
+  }));
+  if (
+    inspectedPeer.value &&
+    !options.some((option) => option.value === selectedId.value)
+  ) {
+    const pin = inspectedPeer.value;
+    options.unshift({
+      value: selectedId.value,
+      label: `Pinned · ${pin.peer.ip} · ${pin.connected ? "outside current map filter" : "disconnected"}`,
+      ...identity(pin.hash),
+    });
+  }
+  return [
+    {
+      value: "",
+      label: options.length
+        ? "Choose a connection to inspect…"
+        : "No mapped connections in this view",
+      disabled: true,
+    },
+    ...options,
+  ];
+});
 let routes: SceneRoute[] = [],
   world: HTMLCanvasElement | undefined,
   still: HTMLCanvasElement | undefined,
@@ -77,6 +130,13 @@ let routes: SceneRoute[] = [],
   dirty = true,
   disposed = false;
 const phases = new Map<string, number>();
+const trafficHits: TrafficHit[] = [];
+const activeConnections = computed(
+  () =>
+    connections.value.filter(
+      (connection) => connection.download > 0 || connection.upload > 0,
+    ).length,
+);
 let drag:
   | {
       id: number;
@@ -87,6 +147,7 @@ let drag:
       panX: number;
       panY: number;
       moved: boolean;
+      inspection?: { id: string; peer?: Peer };
     }
   | undefined;
 let reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -111,6 +172,17 @@ function reset() {
   pan.value = { x: 0, y: 0 };
   yaw.value = -(origin.value?.longitude ?? -100) - 25;
   pitch.value = -(origin.value?.latitude ?? 25) * 0.65;
+}
+function showMostConnections() {
+  const view = bestGlobeView(
+    connections.value.map((connection) => connection.location),
+    origin.value,
+    camera.value,
+  );
+  yaw.value = view.yaw;
+  pitch.value = view.pitch;
+  zoom.value = 1;
+  pan.value = { x: 0, y: 0 };
 }
 function schedule(background = false) {
   worldDirty ||= background;
@@ -218,6 +290,7 @@ function paint(time: number) {
     900,
     phases,
     preferences.markerSize,
+    trafficHits,
   );
   drawOrigin(context, origin.value, camera.value);
   if (active) frame = requestAnimationFrame(paint);
@@ -236,12 +309,33 @@ function position(event: PointerEvent | WheelEvent) {
   const r = canvas.value!.getBoundingClientRect();
   return { x: event.clientX - r.left, y: event.clientY - r.top };
 }
-function hits(event: PointerEvent) {
+function hits(event: PointerEvent, includePaths = false) {
   const point = position(event);
-  return peersNearPoint(routes, point.x, point.y);
+  return pickConnections(
+    routes,
+    trafficHits,
+    point.x,
+    point.y,
+    preferences.showIdle,
+    highlight.value,
+    includePaths,
+  );
 }
 function down(event: PointerEvent) {
   if (event.button !== 0) return;
+  const choices = hits(event, true),
+    index = choices.findIndex(
+      (connection) => connection.id === selectedId.value,
+    ),
+    chosen = choices[(index + 1) % choices.length];
+  let inspection: { id: string; peer?: Peer } | undefined;
+  if (chosen) {
+    const split = chosen.id.indexOf("|"),
+      hash = chosen.id.slice(0, split),
+      key = chosen.id.slice(split + 1),
+      peer = state.peers[hash]?.peers[key];
+    inspection = { id: chosen.id, peer: peer ? { ...peer } : undefined };
+  }
   drag = {
     id: event.pointerId,
     x: event.clientX,
@@ -251,8 +345,9 @@ function down(event: PointerEvent) {
     panX: pan.value.x,
     panY: pan.value.y,
     moved: false,
+    inspection,
   };
-  canvas.value?.setPointerCapture(event.pointerId);
+  canvas.value?.setPointerCapture?.(event.pointerId);
 }
 function move(event: PointerEvent) {
   if (!drag) {
@@ -280,12 +375,17 @@ function move(event: PointerEvent) {
     });
 }
 function up(event: PointerEvent) {
-  if (drag && !drag.moved) {
-    const peers = hits(event),
-      index = peers.findIndex((item) => item.id === selectedId.value),
-      peer = peers[(index + 1) % peers.length];
-    if (peer) inspectConnection(peer.id);
+  if (!drag || event.pointerId !== drag.id) return;
+  const chosen = drag.inspection;
+  if (!drag.moved && chosen) {
+    const split = chosen.id.indexOf("|");
+    inspectPeer(
+      chosen.id.slice(0, split),
+      chosen.id.slice(split + 1),
+      chosen.peer,
+    );
   }
+  canvas.value?.releasePointerCapture?.(event.pointerId);
   drag = undefined;
 }
 function zoomBy(amount: number, point?: { x: number; y: number }) {
@@ -293,8 +393,8 @@ function zoomBy(amount: number, point?: { x: number; y: number }) {
   zoom.value = next.zoom;
   pan.value = { x: next.panX, y: next.panY };
 }
-function selectPeer(event: Event) {
-  const id = (event.target as HTMLSelectElement).value;
+function selectPeer(value: string | number) {
+  const id = String(value);
   if (id) {
     inspectConnection(id);
     framePeer(id);
@@ -386,8 +486,35 @@ onBeforeUnmount(() => {
     <header class="atlas-header">
       <div class="scope-heading">
         <span class="eyebrow">CONNECTION ATLAS</span>
-        <h2 :title="scopeName">{{ scopeName }}</h2>
+        <h2 :title="scopeName">
+          {{ state.expanded ? "Connections" : scopeName }}
+        </h2>
+        <button
+          v-if="state.focusHash && !state.expanded"
+          class="icon-button"
+          aria-label="Clear map focus"
+          title="Show all matching transfers"
+          @click="state.focusHash = ''"
+        >
+          <Icon name="close" :size="18" />
+        </button>
       </div>
+      <SelectMenu
+        v-if="state.expanded"
+        :model-value="state.focusHash"
+        @update:model-value="state.focusHash = String($event)"
+        :options="scopeOptions"
+        label="Map scope"
+        searchable
+        class="map-scope-picker"
+      />
+      <button
+        v-if="state.expanded && hasFilters"
+        class="button compact"
+        @click="resetFilters"
+      >
+        Clear filters
+      </button>
       <div class="atlas-tools">
         <div class="segmented">
           <button
@@ -414,38 +541,17 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </header>
-    <div class="atlas-scope">
-      <button
-        class="scope-chip"
-        :class="{ active: !state.focusHash }"
-        @click="state.focusHash = ''"
-      >
-        All transfers</button
-      ><button
-        v-for="torrent in torrents"
-        :key="torrent.hash"
-        class="scope-chip"
-        :class="{ active: state.focusHash === torrent.hash }"
-        :title="torrent.name"
-        :style="{ '--identity': identity(torrent.hash).color }"
-        @click="inspectTorrent(torrent.hash)"
-      >
-        <Glyph v-bind="identity(torrent.hash)" :size="26" /><span>{{
-          torrent.name
-        }}</span>
-      </button>
-    </div>
     <div class="atlas-stats">
       <span><i class="down-dot" />↓ {{ speed(totals.down) }}</span
       ><span><i class="up-dot" />↑ {{ speed(totals.up) }}</span
       ><span class="muted"
-        >{{ scopedPeers.length }} connected ·
-        {{ connections.length }} mapped</span
+        >{{ activeConnections }} active · {{ connections.length }} located</span
       >
     </div>
     <div ref="surface" class="atlas-surface">
       <canvas
         ref="canvas"
+        :class="{ hit: !!hoveredId }"
         tabindex="0"
         role="img"
         aria-label="Live torrent connection atlas. Drag to rotate or pan, scroll to zoom, Home to reset. Click a peer to pin its inspector."
@@ -478,6 +584,19 @@ onBeforeUnmount(() => {
             : "Locating your exit address…")
         }}</span>
       </div>
+      <div
+        v-if="
+          preferences.geoEnabled &&
+          origin &&
+          !scopedPeers.length &&
+          scopedTorrents.length &&
+          scopedTorrents.every((torrent) => !!state.peers[torrent.hash])
+        "
+        class="atlas-empty-note"
+      >
+        No peers connected
+        {{ scopedTorrents.length === 1 ? "to this transfer" : "in this view" }}.
+      </div>
       <div v-if="hovered" class="peer-hover">
         <Glyph :color="hovered.color" :shape="hovered.shape" />
         <div>
@@ -487,6 +606,8 @@ onBeforeUnmount(() => {
           ><span
             >↓ {{ speed(hovered.download) }} &nbsp; ↑
             {{ speed(hovered.upload) }}</span
+          ><small v-if="!hovered.download && !hovered.upload"
+            >Idle connection</small
           ><small v-if="overlap > 1"
             >{{ overlap }} peers here · click to cycle</small
           >
@@ -512,6 +633,14 @@ onBeforeUnmount(() => {
         >
       </div>
       <div class="map-options">
+        <button
+          v-if="mode === 'globe'"
+          class="button compact"
+          :disabled="!connections.length"
+          aria-label="Show most connections"
+          title="Rotate to show as many connections as possible, keeping your exit visible"
+          @click="showMostConnections"
+        >Show most</button>
         <label
           ><input v-model="preferences.showIdle" type="checkbox" />Idle
           routes</label
@@ -529,34 +658,14 @@ onBeforeUnmount(() => {
       </div>
     </footer>
     <div class="connection-picker">
-      <select
-        aria-label="Inspect a peer connection"
-        :value="selectedId"
-        @change="selectPeer"
-      >
-        <option value="">Choose a connection to inspect…</option>
-        <option
-          v-if="
-            inspectedPeer && !connections.some((peer) => peer.id === selectedId)
-          "
-          :value="selectedId"
-        >
-          Pinned · {{ inspectedPeer.peer.ip }}
-          {{
-            inspectedPeer.connected
-              ? "· outside current map filter"
-              : "· disconnected"
-          }}
-        </option>
-        <option
-          v-for="connection in connections"
-          :key="connection.id"
-          :value="connection.id"
-        >
-          {{ connection.torrentName }} · {{ connection.location.label }} ·
-          {{ connection.ip }}
-        </option></select
-      ><span>Natural Earth · GeoJS</span>
+      <SelectMenu
+        :model-value="selectedId"
+        :options="peerOptions"
+        label="Inspect a peer connection"
+        :disabled="peerOptions.length === 1"
+        searchable
+        @update:model-value="selectPeer"
+      /><span>Natural Earth · GeoJS</span>
     </div>
   </section>
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Glyph from "./Glyph.vue";
 import Icon from "./Icon.vue";
+import TransferToolbar from "./TransferToolbar.vue";
 import { identity } from "../lib/preferences";
 import { state, filtered, inspectTorrent, toggleChecked } from "../lib/store";
 import { bytes, speed, percent, stateLabel, duration } from "../lib/format";
@@ -15,41 +16,118 @@ function sort(key: string) {
 </script>
 <template>
   <section class="library-table pane">
-    <header class="section-header">
-      <div>
-        <span class="eyebrow">TRANSFER LIBRARY</span>
-        <h2>Transfers</h2>
-      </div>
-      <button class="button" @click="$emit('action', 'add', [])">
-        <Icon name="plus" />Add transfer
-      </button>
-    </header>
+    <TransferToolbar
+      layout="table"
+      @action="(action, hashes) => $emit('action', action, hashes)"
+    />
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
-            <th>
-              <input
-                type="checkbox"
-                aria-label="Select all visible transfers"
-                :checked="
-                  !!filtered.length &&
-                  filtered.every((t) => state.checked.includes(t.hash))
-                "
-                @change="
-                  state.checked = ($event.target as HTMLInputElement).checked
-                    ? filtered.map((t) => t.hash)
-                    : []
-                "
-              />
+            <th aria-label="Transfer selection"></th>
+            <th
+              :aria-sort="
+                state.sort === 'name'
+                  ? state.reverse
+                    ? 'descending'
+                    : 'ascending'
+                  : 'none'
+              "
+            >
+              <button @click="sort('name')">
+                Name<Icon
+                  v-if="state.sort === 'name'"
+                  :name="state.reverse ? 'down' : 'up'"
+                  :size="16"
+                />
+              </button>
             </th>
-            <th><button @click="sort('name')">Name</button></th>
             <th>Status</th>
-            <th><button @click="sort('progress')">Progress</button></th>
-            <th><button @click="sort('size')">Size</button></th>
-            <th><button @click="sort('dlspeed')">↓ Download</button></th>
-            <th><button @click="sort('upspeed')">↑ Upload</button></th>
-            <th><button @click="sort('ratio')">Ratio</button></th>
+            <th
+              :aria-sort="
+                state.sort === 'progress'
+                  ? state.reverse
+                    ? 'descending'
+                    : 'ascending'
+                  : 'none'
+              "
+            >
+              <button @click="sort('progress')">
+                Progress<Icon
+                  v-if="state.sort === 'progress'"
+                  :name="state.reverse ? 'down' : 'up'"
+                  :size="16"
+                />
+              </button>
+            </th>
+            <th
+              :aria-sort="
+                state.sort === 'size'
+                  ? state.reverse
+                    ? 'descending'
+                    : 'ascending'
+                  : 'none'
+              "
+            >
+              <button @click="sort('size')">
+                Size<Icon
+                  v-if="state.sort === 'size'"
+                  :name="state.reverse ? 'down' : 'up'"
+                  :size="16"
+                />
+              </button>
+            </th>
+            <th
+              :aria-sort="
+                state.sort === 'dlspeed'
+                  ? state.reverse
+                    ? 'descending'
+                    : 'ascending'
+                  : 'none'
+              "
+            >
+              <button @click="sort('dlspeed')">
+                ↓ Download<Icon
+                  v-if="state.sort === 'dlspeed'"
+                  :name="state.reverse ? 'down' : 'up'"
+                  :size="16"
+                />
+              </button>
+            </th>
+            <th
+              :aria-sort="
+                state.sort === 'upspeed'
+                  ? state.reverse
+                    ? 'descending'
+                    : 'ascending'
+                  : 'none'
+              "
+            >
+              <button @click="sort('upspeed')">
+                ↑ Upload<Icon
+                  v-if="state.sort === 'upspeed'"
+                  :name="state.reverse ? 'down' : 'up'"
+                  :size="16"
+                />
+              </button>
+            </th>
+            <th
+              :aria-sort="
+                state.sort === 'ratio'
+                  ? state.reverse
+                    ? 'descending'
+                    : 'ascending'
+                  : 'none'
+              "
+            >
+              <button @click="sort('ratio')">
+                Ratio<Icon
+                  v-if="state.sort === 'ratio'"
+                  :name="state.reverse ? 'down' : 'up'"
+                  :size="16"
+                />
+              </button>
+            </th>
             <th>ETA</th>
           </tr>
         </thead>
@@ -69,9 +147,12 @@ function sort(key: string) {
               />
             </td>
             <td class="name-cell">
-              <Glyph v-bind="identity(torrent.hash)" :size="28" /><span>{{
-                torrent.name
-              }}</span>
+              <Glyph v-bind="identity(torrent.hash)" :size="28" /><button
+                class="transfer-link"
+                @click.stop="inspectTorrent(torrent.hash, false)"
+              >
+                {{ torrent.name }}
+              </button>
             </td>
             <td>{{ stateLabel(torrent.state) }}</td>
             <td>

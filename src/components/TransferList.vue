@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import Icon from "./Icon.vue";
 import Glyph from "./Glyph.vue";
+import TransferToolbar from "./TransferToolbar.vue";
 import { identity } from "../lib/preferences";
 import {
   state,
@@ -10,135 +10,14 @@ import {
   inspectTorrent,
   toggleChecked,
 } from "../lib/store";
-import {
-  bytes,
-  percent,
-  speed,
-  stateLabel,
-  stopped,
-  statusGroup,
-} from "../lib/format";
+import { bytes, percent, speed, stateLabel, stopped } from "../lib/format";
 const emit = defineEmits<{ action: [action: string, hashes: string[]] }>();
-const filters = [
-  ["all", "Everything"],
-  ["downloading", "Downloading"],
-  ["seeding", "Seeding"],
-  ["stopped", "Stopped"],
-  ["checking", "Checking"],
-  ["active", "Active"],
-  ["error", "Needs attention"],
-];
-const filterCounts = computed(() =>
-  Object.fromEntries(
-    filters.map(([key]) => [
-      key,
-      key === "all"
-        ? torrents.value.length
-        : key === "active"
-          ? torrents.value.filter((t) => t.dlspeed + t.upspeed > 0).length
-          : torrents.value.filter((t) => statusGroup(t.state) === key).length,
-    ]),
-  ),
-);
 </script>
 <template>
   <aside class="transfer-list pane">
-    <header class="library-header">
-      <div>
-        <span class="eyebrow">YOUR LIBRARY</span>
-        <h2>
-          Transfers <small>{{ torrents.length }}</small>
-        </h2>
-      </div>
-      <button
-        class="icon-button"
-        title="Add transfer"
-        aria-label="Add transfer"
-        @click="emit('action', 'add', [])"
-      >
-        <Icon name="plus" />
-      </button>
-    </header>
-    <label class="search-field"
-      ><Icon name="search" :size="16" /><input
-        v-model="state.search"
-        type="search"
-        placeholder="Find a transfer…"
-        aria-label="Search transfers"
-    /></label>
-    <div class="library-filters">
-      <select v-model="state.status" aria-label="Filter transfer status">
-        <option v-for="[key, label] in filters" :key="key" :value="key">
-          {{ label }} · {{ filterCounts[key] }}
-        </option></select
-      ><select v-model="state.sort" aria-label="Sort transfers">
-        <option value="added_on">Newest</option>
-        <option value="name">Name</option>
-        <option value="ratio">Ratio</option>
-        <option value="dlspeed">Download</option>
-        <option value="upspeed">Upload</option>
-        <option value="progress">Progress</option></select
-      ><button
-        class="icon-button small"
-        :aria-label="state.reverse ? 'Sort ascending' : 'Sort descending'"
-        @click="state.reverse = !state.reverse"
-      >
-        <Icon :name="state.reverse ? 'down' : 'up'" :size="14" />
-      </button>
-    </div>
-    <div
-      v-if="Object.keys(state.categories).length || state.tags.length"
-      class="library-extra-filters"
-    >
-      <select v-model="state.category" aria-label="Filter category">
-        <option value="all">All categories</option>
-        <option value="">Uncategorized</option>
-        <option
-          v-for="category in Object.keys(state.categories)"
-          :key="category"
-          :value="category"
-        >
-          {{ category }}
-        </option></select
-      ><select
-        v-if="state.tags.length"
-        v-model="state.tag"
-        aria-label="Filter tag"
-      >
-        <option value="all">All tags</option>
-        <option v-for="tag in state.tags" :key="tag" :value="tag">
-          {{ tag }}
-        </option>
-      </select>
-    </div>
-    <div v-if="state.checked.length" class="bulk-bar">
-      <strong>{{ state.checked.length }} selected</strong
-      ><button
-        class="icon-button small"
-        aria-label="Start selected"
-        @click="emit('action', 'start', state.checked)"
-      >
-        <Icon name="play" :size="15" /></button
-      ><button
-        class="icon-button small"
-        aria-label="Stop selected"
-        @click="emit('action', 'stop', state.checked)"
-      >
-        <Icon name="pause" :size="15" /></button
-      ><button
-        class="icon-button small"
-        aria-label="Remove selected"
-        @click="emit('action', 'remove', state.checked)"
-      >
-        <Icon name="trash" :size="15" /></button
-      ><button
-        class="icon-button small"
-        aria-label="Clear selection"
-        @click="state.checked = []"
-      >
-        <Icon name="close" :size="15" />
-      </button>
-    </div>
+    <TransferToolbar
+      @action="(action, hashes) => emit('action', action, hashes)"
+    />
     <div class="transfer-cards">
       <article
         v-for="torrent in filtered"
@@ -194,14 +73,15 @@ const filterCounts = computed(() =>
             percent(torrent.progress)
           }}</span>
         </div>
+        <div class="transfer-ratio-row">
+          <span>{{ bytes(torrent.size) }}</span><span
+            >Ratio
+            <strong>{{ Number(torrent.ratio || 0).toFixed(2) }}</strong></span
+          >
+        </div>
         <div class="transfer-speeds">
           <span class="download-text">↓ {{ speed(torrent.dlspeed) }}</span
           ><span class="upload-text">↑ {{ speed(torrent.upspeed) }}</span>
-        </div>
-        <div class="transfer-bottom">
-          <span>{{ bytes(torrent.size) }}</span><span
-            >Ratio {{ Number(torrent.ratio || 0).toFixed(2) }}</span
-          >
         </div>
       </article>
       <div v-if="!filtered.length" class="empty">
@@ -215,15 +95,5 @@ const filterCounts = computed(() =>
         }}</span>
       </div>
     </div>
-    <footer class="library-footer">
-      <span>{{ filtered.length }} of {{ torrents.length }} transfers</span
-      ><button
-        v-if="state.focusHash"
-        class="text-button"
-        @click="state.focusHash = ''"
-      >
-        Show all on map
-      </button>
-    </footer>
   </aside>
 </template>

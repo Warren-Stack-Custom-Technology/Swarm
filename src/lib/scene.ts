@@ -241,3 +241,87 @@ export function packetProgress(
   const position = (((phase + elapsed * trafficVelocity(speed)) % 1) + 1) % 1;
   return direction === "download" ? 1 - position : position;
 }
+
+export interface TrafficHit {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;
+}
+/** Hit the glyphs actually drawn, then endpoints, then (on click) the visible path. */
+export function pickConnections(
+  routes: SceneRoute[],
+  packets: TrafficHit[],
+  x: number,
+  y: number,
+  showIdle = false,
+  selectedId = "",
+  includePaths = false,
+): MapConnection[] {
+  const clip = routes[0]?.clip;
+  if (
+    clip &&
+    (x < clip.left ||
+      x > clip.left + clip.width ||
+      y < clip.top ||
+      y > clip.top + clip.height)
+  )
+    return [];
+  const byId = new Map(
+    routes.map((route) => [route.connection.id, route.connection]),
+  );
+  const markerHits = packets
+    .filter((hit) => (hit.x - x) ** 2 + (hit.y - y) ** 2 <= hit.radius ** 2)
+    .sort(
+      (a, b) =>
+        (a.x - x) ** 2 + (a.y - y) ** 2 - ((b.x - x) ** 2 + (b.y - y) ** 2),
+    );
+  const markers = [...new Set(markerHits.map((hit) => hit.id))].flatMap((id) =>
+    byId.has(id) ? [byId.get(id)!] : [],
+  );
+  if (markers.length) return markers;
+  const shown = routes.filter(
+    (route) =>
+      showIdle ||
+      route.connection.download > 0 ||
+      route.connection.upload > 0 ||
+      route.connection.id === selectedId,
+  );
+  const nodes = peersNearPoint(routes, x, y, 15);
+  if (nodes.length || !includePaths) return nodes;
+  const hits: { connection: MapConnection; distance: number }[] = [];
+  for (const route of shown) {
+    let closest = Infinity;
+    for (const shift of route.shifts)
+      for (let index = 1; index < route.points.length; index++) {
+        const a = route.points[index - 1],
+          b = route.points[index];
+        if (!a.visible || !b.visible) continue;
+        if (
+          x < Math.min(a.x, b.x) + shift - 7 ||
+          x > Math.max(a.x, b.x) + shift + 7 ||
+          y < Math.min(a.y, b.y) - 7 ||
+          y > Math.max(a.y, b.y) + 7
+        )
+          continue;
+        const dx = b.x - a.x,
+          dy = b.y - a.y,
+          length = dx * dx + dy * dy;
+        const t = length
+          ? Math.min(
+              1,
+              Math.max(0, ((x - a.x - shift) * dx + (y - a.y) * dy) / length),
+            )
+          : 0;
+        closest = Math.min(
+          closest,
+          (x - a.x - shift - dx * t) ** 2 + (y - a.y - dy * t) ** 2,
+        );
+      }
+    if (closest <= 49)
+      hits.push({ connection: route.connection, distance: closest });
+  }
+  return hits
+    .sort((a, b) => a.distance - b.distance)
+    .map((hit) => hit.connection);
+}

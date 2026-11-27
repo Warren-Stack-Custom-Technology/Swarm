@@ -1,4 +1,4 @@
-import { computed, reactive } from "vue";
+import { computed, reactive, watch } from "vue";
 import { api, ApiError } from "./api";
 import { GeoLookup, isPublicIp } from "./geo";
 import { identity, preferences, allocateIdentities } from "./preferences";
@@ -101,12 +101,42 @@ export const filtered = computed(() =>
       );
     }),
 );
+export const hasFilters = computed(
+  () =>
+    !!state.search.trim() ||
+    state.status !== "all" ||
+    state.category !== "all" ||
+    state.tag !== "all",
+);
+export function resetFilters() {
+  state.search = "";
+  state.status = "all";
+  state.category = "all";
+  state.tag = "all";
+  state.focusHash = "";
+}
+export function focusTorrent(hash: string) {
+  if (!state.torrents[hash]) return;
+  if (!filtered.value.some((torrent) => torrent.hash === hash)) {
+    resetFilters();
+    announce("Filters cleared to show this transfer");
+  }
+  state.focusHash = hash;
+  preferences.view = "atlas";
+}
+watch(filtered, (items) => {
+  if (
+    state.focusHash &&
+    !items.some((torrent) => torrent.hash === state.focusHash)
+  )
+    state.focusHash = "";
+});
 export const selectedTorrent = computed(
   () => state.torrents[state.selectedHash],
 );
 export const scopedTorrents = computed(() =>
   state.focusHash
-    ? torrents.value.filter((t) => t.hash === state.focusHash)
+    ? filtered.value.filter((t) => t.hash === state.focusHash)
     : filtered.value,
 );
 export const scopedPeers = computed(() =>
@@ -391,11 +421,14 @@ export async function loadDetail(force = false) {
   }
 }
 export function inspectTorrent(hash: string, focus = true) {
+  const changed = state.selectedHash !== hash;
   state.selectedHash = hash;
   state.inspectorOpen = true;
-  state.pinnedPeer = null;
-  if (focus) state.focusHash = hash;
-  state.inspectorTab = "overview";
+  if (changed) {
+    state.pinnedPeer = null;
+    state.inspectorTab = "overview";
+  }
+  if (focus) focusTorrent(hash);
   void loadDetail(true);
   void syncPeers();
 }

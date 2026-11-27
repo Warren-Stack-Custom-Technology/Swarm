@@ -14,7 +14,12 @@ import {
   projectLocation,
   sceneScale,
 } from "./scene";
-import type { MapConnection, SceneRoute, SwarmCamera } from "./scene";
+import type {
+  MapConnection,
+  SceneRoute,
+  SwarmCamera,
+  TrafficHit,
+} from "./scene";
 import land from "../assets/land.json";
 
 const packetSprites = new Map<string, OffscreenCanvas>();
@@ -180,9 +185,18 @@ export function drawConnections(
     const active = route.connection.download > 0 || route.connection.upload > 0;
     if (!active && !showIdle && selectedId !== route.connection.id) continue;
     const emphasized = !selectedId || selectedId === route.connection.id;
-    context.globalAlpha = emphasized ? (active ? 0.16 : 0.055) : 0.025;
+    context.globalAlpha = active
+      ? selectedId === route.connection.id
+        ? 0.95
+        : emphasized
+          ? 0.44
+          : 0.2
+      : selectedId === route.connection.id
+        ? 0.35
+        : 0.075;
     context.strokeStyle = route.connection.color;
-    context.lineWidth = selectedId === route.connection.id ? 1.6 : 0.65;
+    context.lineWidth =
+      selectedId === route.connection.id ? 2 : active ? 1.15 : 0.75;
     for (const shift of route.shifts) {
       context.beginPath();
       let started = false;
@@ -231,6 +245,7 @@ export function drawPackets(
   budget = 900,
   phases?: Map<string, number>,
   markerSize = 7,
+  targets?: TrafficHit[],
 ) {
   let drawn = 0;
   const clip = routes[0]?.clip;
@@ -298,12 +313,27 @@ export function drawPackets(
           selectedId === route.connection.id ? markerSize + 1.5 : markerSize,
           scale,
         );
+        if (targets) {
+          const hit =
+            targets[drawn] ??
+            (targets[drawn] = { id: "", x: 0, y: 0, radius: 0 });
+          hit.id = route.connection.id;
+          hit.x = point.x + shift;
+          hit.y =
+            point.y +
+            (direction === "download" ? -markerSize * 0.65 : markerSize * 0.65);
+          hit.radius =
+            (selectedId === route.connection.id
+              ? markerSize + 1.5
+              : markerSize) + 4;
+        }
         drawn++;
       }
     }
   }
   context.globalAlpha = 1;
   if (clip) context.restore();
+  if (targets) targets.length = drawn;
   return drawn;
 }
 

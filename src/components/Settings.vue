@@ -1,10 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import Icon from "./Icon.vue";
+import SelectMenu from "./SelectMenu.vue";
+import { version as appVersion } from "../../package.json";
 import { api } from "../lib/api";
 import { bytes } from "../lib/format";
 import { preferences } from "../lib/preferences";
 import { state, operation, setOrigin, announce } from "../lib/store";
+const scales = [
+  { value: 0.9, label: "90%" },
+  { value: 1, label: "100% · Default" },
+  { value: 1.1, label: "110%" },
+  { value: 1.25, label: "125%" },
+  { value: 1.5, label: "150%" },
+];
 const emit = defineEmits<{ close: [] }>();
 const tab = ref("interface"),
   loading = ref(false),
@@ -103,7 +112,7 @@ async function save() {
   if (tab.value === "interface") {
     try {
       setOrigin(exitDraft.value.trim());
-      announce("Interface preferences saved");
+      emit("close");
     } catch (e) {
       error.value = (e as Error).message;
     }
@@ -297,17 +306,12 @@ onBeforeUnmount(() => {
           <template v-if="tab === 'interface'"
             ><h3>Display</h3>
             <label class="field"
-              >Interface size<select
-                v-model.number="preferences.uiScale"
-                aria-label="Interface size"
-              >
-                <option :value="0.9">90%</option>
-                <option :value="1">100% · Default</option>
-                <option :value="1.1">110%</option>
-                <option :value="1.25">125%</option>
-                <option :value="1.5">150%</option>
-              </select></label
-            >
+              >Interface size<SelectMenu
+                :model-value="preferences.uiScale"
+                :options="scales"
+                label="Interface size"
+                @update:model-value="preferences.uiScale = Number($event)"
+            /></label>
             <label class="field"
               >Traffic shape size
               <div class="marker-size-control">
@@ -513,16 +517,18 @@ onBeforeUnmount(() => {
                 placeholder="Search torrents…"
                 aria-label="Search query"
                 required
-              /><select v-model="searchPlugin">
-                <option value="enabled">All enabled plugins</option>
-                <option
-                  v-for="plugin in plugins"
-                  :key="plugin.name"
-                  :value="plugin.name"
-                >
-                  {{ plugin.fullName }}
-                </option></select
-              ><button class="button compact" :disabled="searchRunning">
+              /><SelectMenu
+                :model-value="searchPlugin"
+                :options="[
+                  { value: 'enabled', label: 'All enabled plugins' },
+                  ...plugins.map((plugin) => ({
+                    value: plugin.name,
+                    label: plugin.fullName,
+                  })),
+                ]"
+                label="Search plugin"
+                @update:model-value="searchPlugin = String($event)"
+              /><button class="button compact" :disabled="searchRunning">
                 Search</button
               ><button
                 v-if="searchRunning"
@@ -567,14 +573,14 @@ onBeforeUnmount(() => {
       </div>
       <footer>
         <span class="muted small-text"
-          >qBittorrent {{ state.version }} · Swarm 1.0.1</span
+          >qBittorrent {{ state.version }} · Swarm {{ appVersion }}</span
         ><button
           v-if="['interface', 'transfers', 'connection'].includes(tab)"
           class="button primary"
           :disabled="state.busy || loading"
           @click="save"
         >
-          Save changes</button
+          {{ tab === "interface" ? "Done" : "Save changes" }}</button
         ><button v-else class="button" @click="emit('close')">Done</button>
       </footer>
     </section>

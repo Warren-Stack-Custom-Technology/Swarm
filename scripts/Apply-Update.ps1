@@ -28,7 +28,7 @@ function Assert-UiFiles {
 }
 
 $release = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'release.json') -Raw | ConvertFrom-Json
-if ($release.app -ne 'swarm-standalone' -or $release.version -ne '1.0.1') { throw 'This is not the expected Swarm standalone release.' }
+if ($release.app -ne 'swarm-standalone' -or $release.version -notmatch '^\d+\.\d+\.\d+$') { throw 'This is not the expected Swarm standalone release.' }
 [object[]]$manifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'WEBUI-SHA256.json') -Raw | ConvertFrom-Json
 if ($manifest.Count -lt 4) { throw 'Release manifest is incomplete.' }
 $source = Join-Path $PSScriptRoot 'webui'
@@ -61,11 +61,11 @@ try {
     $newMoved = $true
     Assert-UiFiles -Folder $active -Files $manifest
     Write-Host ''
-    Write-Host 'Swarm 1.0.1 installed.' -ForegroundColor Green
+    Write-Host "Swarm $($release.version) installed." -ForegroundColor Green
     if ($previousMoved) { Write-Host "Previous Swarm UI: $backup" }
     Write-Host "Active UI:   $active"
     Write-Host 'Swarm UI files verified and installed.'
-    Write-Host 'Open http://localhost:8080/?swarm=1.0.1 and press Ctrl+F5.' -ForegroundColor Cyan
+    Write-Host "Open http://localhost:8080/?swarm=$($release.version) and press Ctrl+F5." -ForegroundColor Cyan
     Write-Host 'Source code: webui\Swarm-source.zip'
 }
 catch {

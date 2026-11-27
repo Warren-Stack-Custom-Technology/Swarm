@@ -11,12 +11,17 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+      - id: version
+        name: Read release version
+        run: node -p "'version=' + require('./package.json').version" >> "$GITHUB_OUTPUT"
       - run: npm ci
       - run: npm test
       - run: npm run build
@@ -26,8 +31,8 @@ jobs:
         run: ./release/Swarm-Standalone/Apply-Update.ps1 -VerifyOnly
       - uses: actions/upload-artifact@v4
         with:
-          name: Swarm-1.0.1
-          path: artifacts/Swarm-1.0.1.*
+          name: Swarm-${{ steps.version.outputs.version }}
+          path: artifacts/Swarm-${{ steps.version.outputs.version }}.*
   publish:
     if: github.event_name == 'release'
     needs: verify
@@ -37,11 +42,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: Swarm-1.0.1
+          name: Swarm-${{ needs.verify.outputs.version }}
           path: artifacts
       - name: Attach verified release files
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$RELEASE_TAG" artifacts/Swarm-1.0.1.zip artifacts/Swarm-1.0.1.sha256 --clobber
+          SWARM_VERSION: ${{ needs.verify.outputs.version }}
+        run: gh release upload "$RELEASE_TAG" "artifacts/Swarm-${SWARM_VERSION}.zip" "artifacts/Swarm-${SWARM_VERSION}.sha256" --clobber

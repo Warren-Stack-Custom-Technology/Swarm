@@ -211,8 +211,7 @@ async function submit() {
               ><input v-model="savePath" placeholder="Default download folder"
             /></label>
             <div class="field-pair">
-              <label class="field"
-                >Category<input v-model="category" list="categories" /></label
+              <label class="field">Category<input v-model="category" /></label
               ><label class="field"
                 >Tags<input v-model="tags" placeholder="Comma separated"
               /></label>
@@ -310,7 +309,6 @@ async function submit() {
             ><label class="field"
               >Category<input
                 v-model="category"
-                list="categories"
                 placeholder="Uncategorized" /></label
             ><label class="field"
               >Tags<input v-model="tags" placeholder="Comma separated" /></label
@@ -323,11 +321,6 @@ async function submit() {
               @focus="($event.target as HTMLTextAreaElement).select()"
             />
           </label>
-          <datalist id="categories">
-            <option v-for="name in Object.keys(state.categories)" :key="name">
-              {{ name }}
-            </option>
-          </datalist>
           <div v-if="error" class="inline-error">{{ error }}</div>
         </div>
         <footer>

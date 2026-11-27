@@ -1,6 +1,8 @@
 <script setup lang="ts">
 withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 });
 const paths: Record<string, string> = {
+  chevron: "M6 9l6 6 6-6",
+  sort: "M4 6h16M4 12h11M4 18h6M18 12v9M15 18l3 3 3-3",
   plus: "M12 5v14M5 12h14",
   play: "M8 5l12 7-12 7z",
   pause: "M8 5v14M16 5v14",

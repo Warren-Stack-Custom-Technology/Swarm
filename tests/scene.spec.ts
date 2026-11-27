@@ -328,3 +328,72 @@ describe("larger readable traffic", () => {
     expect(ctx.fillStyle).toBe("#ff5268");
   });
 });
+
+describe("active connection visibility and inspection", () => {
+  test.each(["download", "upload"] as const)(
+    "draws live %s paths without showing idle connections",
+    (direction) => {
+      const active = makeRoutes(
+        [
+          {
+            ...connection,
+            download: direction === "download" ? 120000 : 0,
+            upload: direction === "upload" ? 120000 : 0,
+          },
+        ],
+        origin,
+        camera,
+      );
+      const idle = makeRoutes(
+        [{ ...connection, download: 0, upload: 0 }],
+        origin,
+        camera,
+      );
+      const ctx = drawingContext();
+      const alpha: number[] = [];
+      ctx.stroke = vi.fn(() => alpha.push(ctx.globalAlpha));
+      drawConnections(ctx, active, "", false);
+      expect(alpha[0]).toBeGreaterThan(0.3);
+      expect(drawPackets(drawingContext(), active, 1, "")).toBeGreaterThan(0);
+      vi.mocked(ctx.stroke).mockClear();
+      drawConnections(ctx, idle, "", false);
+      expect(ctx.lineTo).toHaveBeenCalled();
+      expect(ctx.stroke).toHaveBeenCalledTimes(1);
+      drawConnections(ctx, idle, "", true);
+      expect(ctx.stroke).toHaveBeenCalled();
+    },
+  );
+  test("records the actual rendered marker locations for inspection and replaces stale targets", async () => {
+    vi.stubGlobal("OffscreenCanvas", undefined);
+    const routes = makeRoutes([connection], origin, camera);
+    const hits: { id: string; x: number; y: number; radius: number }[] = [];
+    const ctx = drawingContext();
+    drawPackets(ctx, routes, 1, "", 1, undefined, 8, hits);
+    expect(hits).toHaveLength(1);
+    const { pickConnections } = await import("../src/lib/scene");
+    expect(pickConnections(routes, hits, hits[0].x, hits[0].y)[0]?.id).toBe(
+      connection.id,
+    );
+    drawPackets(ctx, [], 1, "", 1, undefined, 8, hits);
+    expect(hits).toHaveLength(0);
+  });
+  test("selects a visible active trajectory and does not hit a hidden idle path", async () => {
+    const { pickConnections } = await import("../src/lib/scene");
+    const routes = makeRoutes([connection], origin, camera),
+      point = pointAlongRoute(routes[0].points, 0.5)!;
+    expect(
+      pickConnections(routes, [], point.x, point.y, false, "", true)[0]?.id,
+    ).toBe(connection.id);
+    const idle = makeRoutes(
+      [{ ...connection, download: 0, upload: 0 }],
+      origin,
+      camera,
+    );
+    expect(
+      pickConnections(idle, [], point.x, point.y, false, "", true),
+    ).toEqual([]);
+    expect(
+      pickConnections(idle, [], point.x, point.y, true, "", true)[0]?.id,
+    ).toBe(connection.id);
+  });
+});

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Atlas from "./components/Atlas.vue";
 import TransferList from "./components/TransferList.vue";
 import LibraryTable from "./components/LibraryTable.vue";
@@ -9,15 +9,7 @@ import ActionDialog from "./components/ActionDialog.vue";
 import Icon from "./components/Icon.vue";
 import { api } from "./lib/api";
 import { preferences } from "./lib/preferences";
-import {
-  state,
-  torrents,
-  start,
-  stop,
-  login,
-  operation,
-  connect,
-} from "./lib/store";
+import { state, start, stop, login, operation, connect } from "./lib/store";
 import { bytes, speed } from "./lib/format";
 const settingsOpen = ref(false),
   dialog = ref<{ action: string; hashes: string[] } | null>(null),
@@ -61,6 +53,14 @@ async function submitLogin() {
 }
 function keys(event: KeyboardEvent) {
   if (event.key === "Escape") {
+    const menu = document.querySelector<HTMLDetailsElement>(
+      "details.action-menu[open]",
+    );
+    if (menu) {
+      menu.open = false;
+      event.preventDefault();
+      return;
+    }
     if ((event.target as HTMLElement)?.tagName === "SELECT") return;
     if (dialog.value && !state.busy) dialog.value = null;
     else if (settingsOpen.value) settingsOpen.value = false;
@@ -88,12 +88,25 @@ function keys(event: KeyboardEvent) {
     }
   }
 }
+watch(
+  [settingsOpen, dialog, () => preferences.view, () => state.expanded],
+  () => document.dispatchEvent(new Event("swarm:close-menus")),
+);
+function dismissActionMenus(event: PointerEvent) {
+  document
+    .querySelectorAll<HTMLDetailsElement>("details.action-menu[open]")
+    .forEach((menu) => {
+      if (!menu.contains(event.target as Node)) menu.open = false;
+    });
+}
 onMounted(() => {
   start();
+  document.addEventListener("pointerdown", dismissActionMenus, true);
   document.addEventListener("keydown", keys);
 });
 onBeforeUnmount(() => {
   stop();
+  document.removeEventListener("pointerdown", dismissActionMenus, true);
   document.removeEventListener("keydown", keys);
 });
 </script>
@@ -207,7 +220,10 @@ onBeforeUnmount(() => {
         'table-view': preferences.view === 'library' && !state.expanded,
       }"
     >
-      <TransferList @action="action" /><Atlas
+      <TransferList
+        v-if="preferences.view === 'atlas' && !state.expanded"
+        @action="action"
+      /><Atlas
         v-show="preferences.view === 'atlas' || state.expanded"
       /><LibraryTable
         v-if="preferences.view === 'library' && !state.expanded"
@@ -216,15 +232,22 @@ onBeforeUnmount(() => {
     </main>
     <footer class="app-footer">
       <div>
-        <i :class="['connection-dot', state.error ? 'warning' : '']" /><span>{{
+        <i
+          :class="[
+            'connection-dot',
+            state.error ||
+            state.server.connection_status === 'firewalled' ||
+            state.server.connection_status === 'disconnected'
+              ? 'warning'
+              : '',
+          ]"
+        /><span>{{
           state.server.connection_status === "firewalled"
             ? "Firewalled"
             : state.server.connection_status === "disconnected"
               ? "Offline"
               : "qBittorrent connected"
         }}</span
-        ><span class="footer-separator">·</span
-        ><span>{{ torrents.length }} transfers</span
         ><span class="footer-separator">·</span
         ><span
           >{{ bytes(Number(state.server.free_space_on_disk ?? 0)) }} free</span

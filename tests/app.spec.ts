@@ -138,7 +138,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 async function app() {
-  const wrapper = mount(App);
+  const wrapper = mount(App, {attachTo:document.body});
   wrappers.push(wrapper);
   await flushPromises();
   return wrapper;
@@ -272,5 +272,68 @@ describe("transfer actions", () => {
     expect(state.torrents[hash].name).toBe(torrent.name);
     expect(state.torrents[hash].progress).toBe(0.8);
     expect(state.torrents[second]).toBeUndefined();
+  });
+});
+
+describe("one coherent transfer workspace", () => {
+  test("shows one transfer surface and one filter set in each view", async () => {
+    const wrapper = await app();
+    expect(wrapper.findAll(".transfer-controls")).toHaveLength(1);
+    expect(wrapper.findAll('[aria-label="Search transfers"]')).toHaveLength(1);
+    expect(wrapper.find(".atlas-scope").exists()).toBe(false);
+    preferences.view = "library";
+    await flushPromises();
+    expect(wrapper.find(".transfer-list").exists()).toBe(false);
+    expect(wrapper.find(".library-table").exists()).toBe(true);
+    expect(wrapper.findAll(".transfer-controls")).toHaveLength(1);
+    expect(wrapper.findAll('[aria-label="Search transfers"]')).toHaveLength(1);
+    expect(
+      wrapper.findAll('[aria-label="Select all visible transfers"]'),
+    ).toHaveLength(1);
+    expect(wrapper.findAll(".header-actions .primary")).toHaveLength(1);
+  });
+  test("always exposes the share ratio on each sidebar row", async () => {
+    const wrapper = await app();
+    expect(wrapper.findAll(".transfer-ratio-row")).toHaveLength(2);
+    expect(
+      wrapper.findAll(".transfer-ratio-row strong").map((item) => item.text()),
+    ).toEqual(["0.20", "0.20"]);
+  });
+  test("keeps inspection pinned when filters hide its focused torrent", async () => {
+    const wrapper = await app();
+    inspectTorrent(hash);
+    inspectPeer(hash, key, peer);
+    await flushPromises();
+    await wrapper.get('[aria-label="Search transfers"]').setValue("Second");
+    await flushPromises();
+    const { scopedTorrents } = await import("../src/lib/store");
+    expect(state.focusHash).toBe("");
+    expect(scopedTorrents.value.map((t) => t.hash)).toEqual([second]);
+    expect(state.selectedHash).toBe(hash);
+    expect(wrapper.get(".pinned-peer").text()).toContain(peer.ip);
+  });
+  test("reopening the same torrent preserves its detail tab and pinned peer", async () => {
+    await app();
+    inspectPeer(hash, key, peer);
+    state.inspectorTab = "files";
+    await flushPromises();
+    inspectTorrent(hash);
+    await flushPromises();
+    expect(state.inspectorTab).toBe("files");
+    expect(state.pinnedPeer?.key).toBe(key);
+  });
+  test("Escape dismisses an action menu before collapsing the workspace", async () => {
+    const wrapper = await app();
+    inspectTorrent(hash);
+    state.expanded = true;
+    await flushPromises();
+    const menu = wrapper.get("details.action-menu")
+      .element as HTMLDetailsElement;
+    menu.open = true;
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await flushPromises();
+    expect(menu.open).toBe(false);
+    expect(state.expanded).toBe(true);
+    expect(state.inspectorOpen).toBe(true);
   });
 });

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import Icon from "./Icon.vue";
+import SelectMenu from "./SelectMenu.vue";
 import Glyph from "./Glyph.vue";
 import IdentityEditor from "./IdentityEditor.vue";
 import { api } from "../lib/api";
-import { identity, preferences } from "../lib/preferences";
+import { identity } from "../lib/preferences";
 import {
   state,
   selectedTorrent,
@@ -13,6 +14,7 @@ import {
   setTab,
   operation,
   loadDetail,
+  focusTorrent,
 } from "../lib/store";
 import {
   bytes,
@@ -22,6 +24,19 @@ import {
   duration,
   stopped,
 } from "../lib/format";
+const priorityOptions = [
+  { value: 0, label: "Skip" },
+  { value: 1, label: "Normal" },
+  { value: 6, label: "High" },
+  { value: 7, label: "Maximum" },
+];
+const allPriorityOptions = [
+  { value: "", label: "All files…", disabled: true },
+  ...priorityOptions.map((option) => ({
+    ...option,
+    label: option.value === 0 ? "Skip all" : option.label + " priority",
+  })),
+];
 const emit = defineEmits<{ action: [action: string, hashes: string[]] }>();
 const fileSearch = ref(""),
   fileLimit = ref(150),
@@ -64,7 +79,7 @@ watch(
     trackerInput.value = "";
   },
 );
-async function priority(id: string, value: string) {
+async function priority(id: string, value: string | number) {
   if (
     await operation(
       () =>
@@ -185,10 +200,7 @@ async function copyMagnet() {
           />{{ stopped(selectedTorrent.state) ? "Start" : "Stop" }}</button
         ><button
           class="button compact subtle"
-          @click="
-            state.focusHash = selectedTorrent.hash;
-            preferences.view = 'atlas';
-          "
+          @click="focusTorrent(selectedTorrent.hash)"
         >
           Focus atlas
         </button>
@@ -357,44 +369,27 @@ async function copyMagnet() {
             type="search"
             placeholder="Filter file paths…"
             aria-label="Filter files"
-          /><select
-            aria-label="Set priority for all files"
-            value=""
+          /><SelectMenu
+            :model-value="''"
+            :options="allPriorityOptions"
+            label="Set priority for all files"
             :disabled="state.busy || !files.length"
-            @change="
-              priority(
-                files.map((file) => file.index).join('|'),
-                ($event.target as HTMLSelectElement).value,
-              )
+            @update:model-value="
+              priority(files.map((file) => file.index).join('|'), $event)
             "
-          >
-            <option value="" disabled>All files…</option>
-            <option value="0">Skip all</option>
-            <option value="1">Normal priority</option>
-            <option value="6">High priority</option>
-            <option value="7">Maximum priority</option>
-          </select>
+          />
         </div>
         <div v-for="file in visibleFiles" :key="file.index" class="file-row">
           <span class="file-path">{{ file.name }}</span>
           <div>
             <small>{{ bytes(file.size) }} · {{ percent(file.progress) }}</small
-            ><select
-              :value="file.priority"
-              :aria-label="`Priority for ${file.name}`"
+            ><SelectMenu
+              :model-value="file.priority"
+              :options="priorityOptions"
+              :label="`Priority for ${file.name}`"
               :disabled="state.busy"
-              @change="
-                priority(
-                  String(file.index),
-                  ($event.target as HTMLSelectElement).value,
-                )
-              "
-            >
-              <option :value="0">Skip</option>
-              <option :value="1">Normal</option>
-              <option :value="6">High</option>
-              <option :value="7">Maximum</option>
-            </select>
+              @update:model-value="priority(String(file.index), $event)"
+            />
           </div>
         </div>
         <button
